@@ -1,5 +1,5 @@
 name: argy
-version: 0.1.1
+version: 0.1.2
 description: Typed CLI framework for Crystal with nested commands, inherited flags, and lifecycle hooks.
 authors:
   - Aristotelis Rapai <aristorap.dev@gmail.com>

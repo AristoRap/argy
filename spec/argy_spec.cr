@@ -13,6 +13,14 @@ class SilentHelpCommand < Argy::Command
   end
 end
 
+class TrackingHelpCommand < Argy::Command
+  getter help_calls : Int32 = 0
+
+  def print_help(io : IO = STDOUT) : Nil
+    @help_calls += 1
+  end
+end
+
 class Argy::Command
   def __execute_without_rescue_for_spec(argv : Array(String)) : Nil
     argv = argv[1..] if argv.first? == name
@@ -463,6 +471,79 @@ describe Argy::Command do
 
       cmd.execute(["--help"])
       order.should be_empty
+    end
+
+    it "short-circuits hooks across nested routing when --help is present" do
+      order = [] of String
+
+      root = Argy::Command.new(use: "root")
+      db = Argy::Command.new(use: "db")
+      leaf = SilentHelpCommand.new(use: "migrate")
+
+      root.on_persistent_pre_run { |_c, _a| order << "root.persistent_pre" }
+      db.on_persistent_pre_run { |_c, _a| order << "db.persistent_pre" }
+      leaf.on_pre_run { |_c, _a| order << "leaf.pre_run" }
+      leaf.on_run { |_c, _a| order << "leaf.run" }
+
+      db.add_command(leaf)
+      root.add_command(db)
+
+      root.execute(["db", "migrate", "--help"])
+      order.should be_empty
+    end
+
+    it "prints help when a matched command has no run handler" do
+      root = Argy::Command.new(use: "root")
+      group = TrackingHelpCommand.new(use: "group")
+      root.add_command(group)
+
+      root.execute(["group"])
+      group.help_calls.should eq 1
+    end
+  end
+
+  describe "help rendering" do
+    it "prints root help when argv is empty and subcommands exist" do
+      root = TrackingHelpCommand.new(use: "root")
+      child_called = false
+
+      child = Argy::Command.new(use: "child")
+      child.on_run { |_cmd, _args| child_called = true }
+      root.add_command(child)
+
+      root.execute([] of String)
+
+      root.help_calls.should eq 1
+      child_called.should be_false
+    end
+
+    it "prints help sections in expected order" do
+      root = Argy::Command.new(use: "root", short: "root")
+      root.persistent_flags.string("env", 'e', "dev", "env")
+
+      child = Argy::Command.new(use: "child", short: "child")
+      leaf = Argy::Command.new(use: "leaf", short: "leaf")
+
+      child.flags.bool("dry-run", 'd', false, "dry run")
+      child.persistent_flags.bool("verbose", 'v', false, "verbose")
+
+      child.add_command(leaf)
+      root.add_command(child)
+
+      output = IO::Memory.new
+      child.print_help(output)
+      text = output.to_s
+
+      usage_i = text.index("Usage:").not_nil!
+      available_i = text.index("Available Commands:").not_nil!
+      flags_i = text.index("Flags:").not_nil!
+      global_i = text.index("Global Flags:").not_nil!
+      persistent_i = text.index("Persistent Flags:").not_nil!
+
+      (usage_i < available_i).should be_true
+      (available_i < flags_i).should be_true
+      (flags_i < global_i).should be_true
+      (global_i < persistent_i).should be_true
     end
   end
 
