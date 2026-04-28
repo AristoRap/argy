@@ -4,5 +4,5 @@ require "./argy/flag_set"
 require "./argy/command"
 
 module Argy
-  VERSION = "0.1.0"
+  VERSION = "0.1.1"
 end
