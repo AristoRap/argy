@@ -635,4 +635,104 @@ describe Argy::Command do
       cmd.name.should eq "serve"
     end
   end
+
+  describe "aliases" do
+    it "exposes aliases via the getter" do
+      cmd = Argy::Command.new(use: "build", short: "build", aliases: ["b", "bld"])
+      cmd.aliases.should eq ["b", "bld"]
+    end
+
+    it "defaults to an empty aliases list when not specified" do
+      cmd = Argy::Command.new(use: "build", short: "build")
+      cmd.aliases.should be_empty
+    end
+
+    it "routes to a subcommand by alias" do
+      called = false
+      root = make_root
+      child = Argy::Command.new(use: "build", short: "build", aliases: ["b"])
+      child.on_run { |_cmd, _args| called = true }
+      root.add_command(child)
+
+      root.execute(["b"])
+      called.should be_true
+    end
+
+    it "routes to the same command via multiple aliases" do
+      names = [] of String
+      root = make_root
+      child = Argy::Command.new(use: "build", short: "build", aliases: ["b", "bld"])
+      child.on_run { |cmd, _args| names << cmd.name }
+      root.add_command(child)
+
+      root.execute(["b"])
+      root.execute(["bld"])
+      names.should eq ["build", "build"]
+    end
+
+    it "still routes to the canonical name when aliases are defined" do
+      called = false
+      root = make_root
+      child = Argy::Command.new(use: "build", short: "build", aliases: ["b"])
+      child.on_run { |_cmd, _args| called = true }
+      root.add_command(child)
+
+      root.execute(["build"])
+      called.should be_true
+    end
+
+    it "passes flags and positional args through when routed by alias" do
+      received_env = ""
+      received_args = [] of String
+      root = make_root
+      child = Argy::Command.new(use: "build", short: "build", aliases: ["b"])
+      child.flags.string("env", 'e', "dev", "env")
+      child.on_run { |cmd, args| received_env = cmd.string_flag("env"); received_args = args }
+      root.add_command(child)
+
+      root.execute(["b", "--env", "prod", "file.cr"])
+      received_env.should eq "prod"
+      received_args.should eq ["file.cr"]
+    end
+
+    it "routes nested subcommands by alias" do
+      called = false
+      root = make_root
+      db = Argy::Command.new(use: "database", short: "database", aliases: ["db"])
+      migrate = Argy::Command.new(use: "migrate", short: "migrate", aliases: ["m"])
+      migrate.on_run { |_cmd, _args| called = true }
+      db.add_command(migrate)
+      root.add_command(db)
+
+      root.execute(["db", "m"])
+      called.should be_true
+    end
+
+    it "shows aliases alongside the canonical name in help output" do
+      root = Argy::Command.new(use: "root", short: "root")
+      child = Argy::Command.new(use: "build", short: "build the project", aliases: ["b", "bld"])
+      child.on_run { |_cmd, _args| }
+      root.add_command(child)
+
+      output = IO::Memory.new
+      root.print_help(output)
+      text = output.to_s
+
+      text.should contain("build, b, bld")
+    end
+
+    it "does not list aliases as separate entries in help output" do
+      root = Argy::Command.new(use: "root", short: "root")
+      child = Argy::Command.new(use: "build", short: "build the project", aliases: ["b"])
+      child.on_run { |_cmd, _args| }
+      root.add_command(child)
+
+      output = IO::Memory.new
+      root.print_help(output)
+      lines = output.to_s.lines.select(&.includes?("build"))
+
+      # Only one line should mention build (not a separate line for the alias)
+      lines.size.should eq 1
+    end
+  end
 end

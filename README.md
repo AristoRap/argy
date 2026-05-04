@@ -16,6 +16,7 @@ It helps you build command trees with typed flags, inherited global flags, and a
 ## Features
 
 - Nested commands and subcommands
+- **Command aliases** — route multiple tokens to the same command (e.g. `build` and `b`)
 - Typed flags: `string`, `bool`, `int`, `float`
 - Local flags (`flags`) and inherited global flags (`persistent_flags`)
 - Command lifecycle hooks with `on_pre_run` and `on_persistent_pre_run`
@@ -81,6 +82,55 @@ serve = Argy::Command.new(use: "serve", short: "Start server")
 
 root.add_command(serve)
 root.execute
+```
+
+## Command Aliases
+
+Pass `aliases` to give a command one or more alternative names. Every alias is registered alongside the canonical name, so `argy b` dispatches to exactly the same handler as `argy build`:
+
+```crystal
+build = Argy::Command.new(
+  use: "build",
+  short: "Compile the project",
+  aliases: ["b", "bld"]
+)
+
+build.on_run do |_cmd, _args|
+  puts "Building..."
+end
+
+root.add_command(build)
+```
+
+All three invocations below are equivalent:
+
+```bash
+mytool build
+mytool b
+mytool bld
+```
+
+Aliases also work at every level of a nested command tree:
+
+```crystal
+db = Argy::Command.new(use: "database", short: "Database commands", aliases: ["db"])
+migrate = Argy::Command.new(use: "migrate", short: "Run migrations", aliases: ["m"])
+
+db.add_command(migrate)
+root.add_command(db)
+
+# All equivalent:
+# mytool database migrate
+# mytool db migrate
+# mytool db m
+# mytool database m
+```
+
+Help output lists aliases inline next to the canonical name:
+
+```
+Available Commands:
+  build, b, bld   Compile the project
 ```
 
 ## Defining and Reading Flags

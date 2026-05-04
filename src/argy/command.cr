@@ -33,6 +33,9 @@ module Argy
     # Long description shown at the top of this command's help page
     property long : String
 
+    # Alternative names that route to this command
+    getter aliases : Array(String)
+
     # ------------------------------------------------------------------
     # Construction
     # ------------------------------------------------------------------
@@ -41,7 +44,9 @@ module Argy
       @use : String,
       @short : String = "",
       @long : String = "",
+      aliases : Array(String) = [] of String,
     )
+      @aliases = aliases
       # Register built-in --help / -h
       @flags.bool("help", 'h', false, "Show help for this command")
     end
@@ -91,6 +96,7 @@ module Argy
       cmds.each do |cmd|
         cmd.set_parent(self)
         @subcommands[cmd.name] = cmd
+        cmd.aliases.each { |a| @subcommands[a] = cmd }
       end
     end
 
@@ -167,9 +173,12 @@ module Argy
       # Subcommands
       unless @subcommands.empty?
         io.puts "Available Commands:"
-        max_len = @subcommands.keys.max_of(&.size)
-        @subcommands.each_value do |cmd|
-          io.printf "  %-#{max_len + 2}s %s\n", cmd.name, cmd.short
+        seen = Set(Command).new
+        unique_cmds = @subcommands.each_value.select { |cmd| seen.add?(cmd) }.to_a
+        labels = unique_cmds.map { |cmd| ([cmd.name] + cmd.aliases).join(", ") }
+        max_len = labels.max_of(&.size)
+        unique_cmds.each_with_index do |cmd, i|
+          io.printf "  %-#{max_len + 2}s %s\n", labels[i], cmd.short
         end
         io.puts
       end
@@ -385,6 +394,7 @@ module Argy
     @flags = FlagSet.new
     @persistent_flags = FlagSet.new
     @subcommands = {} of String => Command
+    @aliases = [] of String
     @parent : Command? = nil
     @on_run : (Command, Array(String) ->)? = nil
     @on_pre_run : (Command, Array(String) ->)? = nil
