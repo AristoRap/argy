@@ -36,6 +36,9 @@ module Argy
     # Alternative names that route to this command
     getter aliases : Array(String)
 
+    # When true, this command is excluded from help listings but still callable
+    property hidden : Bool
+
     # ------------------------------------------------------------------
     # Construction
     # ------------------------------------------------------------------
@@ -45,6 +48,7 @@ module Argy
       @short : String = "",
       @long : String = "",
       aliases : Array(String) = [] of String,
+      @hidden : Bool = false,
     )
       @aliases = aliases
       # Register built-in --help / -h
@@ -171,13 +175,13 @@ module Argy
       io.puts
 
       # Subcommands
-      unless @subcommands.empty?
+      seen = Set(Command).new
+      visible_cmds = @subcommands.each_value.select { |cmd| seen.add?(cmd) && !cmd.hidden }.to_a
+      unless visible_cmds.empty?
         io.puts "Available Commands:"
-        seen = Set(Command).new
-        unique_cmds = @subcommands.each_value.select { |cmd| seen.add?(cmd) }.to_a
-        labels = unique_cmds.map { |cmd| ([cmd.name] + cmd.aliases).join(", ") }
+        labels = visible_cmds.map { |cmd| ([cmd.name] + cmd.aliases).join(", ") }
         max_len = labels.max_of(&.size)
-        unique_cmds.each_with_index do |cmd, i|
+        visible_cmds.each_with_index do |cmd, i|
           io.printf "  %-#{max_len + 2}s %s\n", labels[i], cmd.short
         end
         io.puts
@@ -210,7 +214,7 @@ module Argy
         io.puts
       end
 
-      unless @subcommands.empty?
+      unless visible_cmds.empty?
         io.puts "Use \"#{root_command.name} [command] --help\" for more information about a command."
       end
     end

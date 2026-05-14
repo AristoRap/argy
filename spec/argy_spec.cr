@@ -735,4 +735,64 @@ describe Argy::Command do
       lines.size.should eq 1
     end
   end
+
+  describe "hidden" do
+    it "defaults hidden to false" do
+      cmd = Argy::Command.new(use: "build", short: "build")
+      cmd.hidden.should be_false
+    end
+
+    it "exposes the hidden property" do
+      cmd = Argy::Command.new(use: "build", short: "build", hidden: true)
+      cmd.hidden.should be_true
+    end
+
+    it "excludes a hidden command from help output" do
+      root = Argy::Command.new(use: "root", short: "root")
+      hidden_cmd = Argy::Command.new(use: "secret", short: "secret command", hidden: true)
+      hidden_cmd.on_run { }
+      root.add_command(hidden_cmd)
+
+      output = IO::Memory.new
+      root.print_help(output)
+      output.to_s.should_not contain("secret")
+    end
+
+    it "still shows visible commands when some are hidden" do
+      root = Argy::Command.new(use: "root", short: "root")
+      hidden_cmd = Argy::Command.new(use: "secret", short: "secret command", hidden: true)
+      visible_cmd = Argy::Command.new(use: "normal", short: "normal command")
+      hidden_cmd.on_run { }
+      visible_cmd.on_run { }
+      root.add_command(hidden_cmd, visible_cmd)
+
+      output = IO::Memory.new
+      root.print_help(output)
+      text = output.to_s
+      text.should contain("normal")
+      text.should_not contain("secret")
+    end
+
+    it "omits the Available Commands section when all subcommands are hidden" do
+      root = Argy::Command.new(use: "root", short: "root")
+      hidden_cmd = Argy::Command.new(use: "secret", short: "secret command", hidden: true)
+      hidden_cmd.on_run { }
+      root.add_command(hidden_cmd)
+
+      output = IO::Memory.new
+      root.print_help(output)
+      output.to_s.should_not contain("Available Commands:")
+    end
+
+    it "still routes to a hidden command by name" do
+      called = false
+      root = make_root
+      hidden_cmd = Argy::Command.new(use: "secret", short: "secret", hidden: true)
+      hidden_cmd.on_run { |_cmd, _args| called = true }
+      root.add_command(hidden_cmd)
+
+      root.execute(["secret"])
+      called.should be_true
+    end
+  end
 end

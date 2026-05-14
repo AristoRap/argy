@@ -17,6 +17,7 @@ It helps you build command trees with typed flags, inherited global flags, and a
 
 - Nested commands and subcommands
 - **Command aliases** — route multiple tokens to the same command (e.g. `build` and `b`)
+- **Hidden commands** — exclude internal commands from help listings while keeping them callable
 - Typed flags: `string`, `bool`, `int`, `float`
 - Local flags (`flags`) and inherited global flags (`persistent_flags`)
 - Command lifecycle hooks with `on_pre_run` and `on_persistent_pre_run`
@@ -132,6 +133,26 @@ Help output lists aliases inline next to the canonical name:
 Available Commands:
   build, b, bld   Compile the project
 ```
+
+## Hidden Commands
+
+Pass `hidden: true` to keep a command out of all help listings while keeping it fully callable by name. This is useful for internal utilities or escape-hatch commands that you do not want to advertise to end users.
+
+```crystal
+internal = Argy::Command.new(
+  use:    "debug",
+  short:  "Internal debug utilities",
+  hidden: true
+)
+
+internal.on_run do |_cmd, _args|
+  puts "debug mode"
+end
+
+root.add_command(internal)
+```
+
+`debug` will never appear in `root --help` or any parent's help listing, but `mytool debug` still dispatches to it normally.
 
 ## Defining and Reading Flags
 
